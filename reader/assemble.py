@@ -1,0 +1,240 @@
+"""Parsed LLM output + confidence lookup -> API eye results (spec 5.6). Pure Python."""
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Literal
+
+from reader.normalize import (
+    Normalized,
+    normalize_axis,
+    normalize_color,
+    normalize_mm,
+    normalize_power,
+)
+from reader.schemas import (
+    BrandValue,
+    EyeResult,
+    FieldValue,
+    GlassesEyeRaw,
+    GlassesExtraction,
+    LensEyeRaw,
+    LensExtraction,
+    NearValues,
+    RawField,
+    RawNear,
+    SharedFieldValue,
+)
+from reader.validate import FORMAT_PENALTY, check_cyl_axis, check_value
+
+ConfidenceLookup = Callable[[str], float]
+
+Kind = Literal["sph", "cyl", "axis", "add", "bc", "dia", "color"]
+
+
+@dataclass
+class Assembled:
+    right: EyeResult | None
+    left: EyeResult | None
+    brand: BrandValue | None
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _Prepared:
+    raw: RawField
+    norm: Normalized
+    codes: list[str]  # normalize codes + check_value codes (pair code appended later)
+    penalize: bool
+
+    @property
+    def number(self) -> Decimal | int | None:
+        v = self.norm.value
+        return None if self.norm.unparseable or isinstance(v, str) else v
+
+
+def _present(raw: RawField | None) -> RawField | None:
+    if raw is None or raw.raw.strip() == "":
+        return None
+    return raw
+
+
+def _prepare(raw: RawField | None, kind: Kind) -> _Prepared | None:
+    raw = _present(raw)
+    if raw is None:
+        return None
+    if kind in ("sph", "cyl", "add"):
+        norm = normalize_power(raw.raw, field=kind)
+    elif kind == "axis":
+        norm = normalize_axis(raw.raw)
+    elif kind in ("bc", "dia"):
+        norm = normalize_mm(raw.raw)
+    else:
+        norm = normalize_color(raw.raw)
+    codes = list(norm.warnings)
+    penalize = norm.penalize
+    if not norm.unparseable and kind != "color" and norm.value is not None:
+        checked = check_value(kind, norm.value)  # type: ignore[arg-type]
+        codes.extend(checked)
+        penalize = penalize or bool(checked)
+    return _Prepared(raw, norm, codes, penalize)
+
+
+def _pair_codes(
+    cyl: _Prepared | None, axis: _Prepared | None
+) -> tuple[str | None, str | None]:
+    """Return (code for cyl, code for axis)."""
+    code = check_cyl_axis(
+        cyl.number if cyl else None,  # type: ignore[arg-type]
+        axis.number if axis else None,  # type: ignore[arg-type]
+    )
+    if code == "cyl_without_axis" and cyl is not None:
+        return code, None
+    if code == "axis_without_cyl" and axis is not None:
+        return None, code
+    return None, None
+
+
+def _build(
+    prep: _Prepared | None,
+    out_path: str,
+    conf_path: str,
+    conf: ConfidenceLookup,
+    warnings: list[str],
+    pair_code: str | None = None,
+    shared: bool | None = None,
+) -> FieldValue | SharedFieldValue | None:
+    if prep is None:
+        return None
+    codes = list(prep.codes)
+    penalize = prep.penalize
+    if pair_code:
+        codes.append(pair_code)
+        penalize = True
+    warnings.extend(f"{out_path}: {c}" for c in codes)
+    if prep.norm.unparseable:
+        confidence = 0.0
+        value: float | int | str | None = None
+    else:
+        confidence = float(conf(conf_path))
+        if penalize:
+            confidence *= FORMAT_PENALTY
+        v = prep.norm.value
+        value = float(v) if isinstance(v, Decimal) else v
+    confidence = min(1.0, max(0.0, confidence))
+    kwargs = dict(
+        value=value,
+        raw=prep.raw.raw,
+        confidence=confidence,
+        handwritten=prep.raw.handwritten,
+    )
+    if shared is None:
+        return FieldValue(**kwargs)
+    return SharedFieldValue(**kwargs, shared=shared)
+
+
+def _near(
+    near: RawNear | None, eye: str, conf: ConfidenceLookup, warnings: list[str]
+) -> NearValues | None:
+    if near is None:
+        return None
+    sph = _prepare(near.sph, "sph")
+    cyl = _prepare(near.cyl, "cyl")
+    axis = _prepare(near.axis, "axis")
+    cyl_code, axis_code = _pair_codes(cyl, axis)
+    base = f"{eye}.near"
+    result = NearValues(
+        sph=_build(sph, f"{base}.sph", f"{base}.sph.raw", conf, warnings),
+        cyl=_build(cyl, f"{base}.cyl", f"{base}.cyl.raw", conf, warnings, cyl_code),
+        axis=_build(axis, f"{base}.axis", f"{base}.axis.raw", conf, warnings, axis_code),
+    )
+    if result.sph is None and result.cyl is None and result.axis is None:
+        return None
+    return result
+
+
+def _mm_field(
+    own: RawField | None,
+    shared_raw: RawField | None,
+    kind: Literal["bc", "dia"],
+    eye: str,
+    conf: ConfidenceLookup,
+    warnings: list[str],
+) -> SharedFieldValue | None:
+    own_prep = _prepare(own, kind)
+    shared_prep = _prepare(shared_raw, kind)
+    out_path = f"{eye}.{kind}"
+    if own_prep is not None:
+        result = _build(
+            own_prep, out_path, f"{eye}.{kind}.raw", conf, warnings, shared=False
+        )
+        if shared_prep is not None:
+            warnings.append(f"{out_path}: shared_conflict")
+        return result  # type: ignore[return-value]
+    return _build(  # type: ignore[return-value]
+        shared_prep, out_path, f"shared_{kind}.raw", conf, warnings, shared=True
+    )
+
+
+def _assemble_eye(
+    eye_raw: LensEyeRaw | GlassesEyeRaw | None,
+    eye: str,
+    ex: LensExtraction | GlassesExtraction,
+    conf: ConfidenceLookup,
+    warnings: list[str],
+) -> EyeResult | None:
+    if eye_raw is None:
+        return None
+    sph = _prepare(eye_raw.sph, "sph")
+    cyl = _prepare(eye_raw.cyl, "cyl")
+    axis = _prepare(eye_raw.axis, "axis")
+    add = _prepare(eye_raw.add, "add")
+    cyl_code, axis_code = _pair_codes(cyl, axis)
+
+    def build(prep: _Prepared | None, name: str, pair: str | None = None):
+        return _build(prep, f"{eye}.{name}", f"{eye}.{name}.raw", conf, warnings, pair)
+
+    f_sph = build(sph, "sph")
+    f_cyl = build(cyl, "cyl", cyl_code)
+    f_axis = build(axis, "axis", axis_code)
+    f_add = build(add, "add")
+    f_bc = _mm_field(eye_raw.bc, ex.shared_bc, "bc", eye, conf, warnings)
+    f_dia = _mm_field(eye_raw.dia, ex.shared_dia, "dia", eye, conf, warnings)
+    if isinstance(eye_raw, LensEyeRaw):
+        f_color = build(_prepare(eye_raw.color, "color"), "color")
+        f_near = None
+    else:
+        f_color = None
+        f_near = _near(eye_raw.near, eye, conf, warnings)
+    result = EyeResult(
+        sph=f_sph,
+        cyl=f_cyl,
+        axis=f_axis,
+        add=f_add,
+        bc=f_bc,
+        dia=f_dia,
+        color=f_color,
+        near=f_near,
+    )
+    if all(v is None for v in result.model_dump().values()):
+        return None
+    return result
+
+
+def _assemble(ex: LensExtraction | GlassesExtraction, conf: ConfidenceLookup) -> Assembled:
+    warnings: list[str] = []
+    right = _assemble_eye(ex.right, "right", ex, conf, warnings)
+    left = _assemble_eye(ex.left, "left", ex, conf, warnings)
+    brand = None
+    if isinstance(ex, LensExtraction) and ex.brand is not None and ex.brand.strip():
+        brand = BrandValue(raw=ex.brand.strip(), confidence=float(conf("brand")))
+    return Assembled(right=right, left=left, brand=brand, warnings=warnings)
+
+
+def assemble_lens(ex: LensExtraction, conf: ConfidenceLookup) -> Assembled:
+    return _assemble(ex, conf)
+
+
+def assemble_glasses(ex: GlassesExtraction, conf: ConfidenceLookup) -> Assembled:
+    return _assemble(ex, conf)
