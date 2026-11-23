@@ -155,7 +155,8 @@ READER_VLLM_URL=http://localhost:8000/v1 pytest -m integration -v
 ```
 
 `READER_VLLM_URL` tanımlı değilse bu testler atlanır. Her isteğin 60 sn altında kalması hedeflenir
-(`latency_ms` alanına bakın).
+(`latency_ms` alanına bakın). Bu yüzden `config/models.yaml` içinde `timeout_s` 28 sn'dir: iki ardışık
+model çağrısı (sınıflandırma + okuma) en kötü durumda bile 60 sn hedefinin altında kalır.
 
 ## KVKK notu
 
