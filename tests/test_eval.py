@@ -63,6 +63,33 @@ def test_null_eye_with_only_null_truth_doc_wrong():
     assert auto_approve(rows, [pred("a", resp(right=None))])["n_wrong"] == 1
 
 
+def test_prediction_for_null_truth_eye_counts_wrong_per_field():
+    rows = [row("a", right={"sph": -1.0}, left=None)]
+    preds = [pred("a", resp(right={"sph": f(-1.0)},
+                            left={"sph": f(-2.0, .7), "cyl": f(-0.5, .6), "add": f(None)}))]
+    acc = field_accuracy(rows, preds)
+    assert acc["glasses.sph"]["n"] == 2 and acc["glasses.sph"]["exact"] == 0.5
+    assert acc["all.cyl"] == {"n": 1, "exact": 0.0, "tolerant": 0.0}
+    assert "all.add" not in acc  # null prediction on a null eye is correct, not an item
+    r = auto_approve(rows, preds)
+    assert r["n_wrong"] == 1 and r["threshold"] is None
+
+
+def test_null_truth_eye_null_prediction_is_fine():
+    rows = [row("a", right={"sph": -1.0}, left=None)]
+    preds = [pred("a", resp(right={"sph": f(-1.0)}, left=None))]
+    assert field_accuracy(rows, preds)["all.sph"]["n"] == 1
+    assert auto_approve(rows, preds)["n_wrong"] == 0
+
+
+def test_spurious_eye_lowers_document_confidence():
+    rows = [row("a", right={"sph": -1.0}, left=None)]
+    preds = [pred("a", resp(right={"sph": f(-1.0, .99)}, left={"sph": f(-2.0, .4)}))]
+    from eval.metrics import _doc_result
+    conf, ok = _doc_result(rows[0], preds[0])
+    assert ok is False and conf == 0.4
+
+
 def test_no_qualifying_threshold():
     rows = [row("a", right={"sph": -1.0}), row("b", right={"sph": -1.0})]
     preds = [pred("a", resp(dconf=.99, right={"sph": f(-2.0, .99)})),

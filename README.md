@@ -45,9 +45,9 @@ boyutu sınırı koyun, örn. nginx'te `client_max_body_size 15m;`.
   },
   "left":  { "...": "aynı yapı" },
   "brand": null,
-  "warnings": ["left.axis: shared_conflict"],
+  "warnings": ["left.sph: not_quarter_step"],
   "model": "qwen3-vl-8b-instruct",
-  "prompt_version": "glasses-v1",
+  "prompt_version": "classify-v1/glasses-v1",
   "latency_ms": 1840
 }
 ```
@@ -70,14 +70,19 @@ Uyarılar `"<yol>: <kod>"` biçimindedir ve değer içermez.
 | `not_quarter_step` | Değer 0.25 adımına uymuyor |
 | `cyl_without_axis` | CYL var, aks yok |
 | `axis_without_cyl` | Aks var, CYL yok |
-| `shared_conflict` | Ortak (shared) BC/DIA değerleri iki gözde çelişiyor |
-| `confidence_unavailable` | Model logprob döndürmedi, güven hesaplanamadı |
+| `shared_conflict` | Bir gözün kendi BC/DIA değeri ile ortak (shared) değer birlikte var ve farklı; iki gözün güveni de düşürülür |
+| `confidence_unavailable` | Model logprob döndürmedi veya token hizalaması kurulamadı, güven hesaplanamadı |
 
 ### Güven puanı
 
 `confidence`, token olasılıklarının minimumundan (ve format cezasından) türeyen **kalibre edilmemiş
 ham bir sinyaldir**; "%97 doğru" anlamına gelmez. Otomatik onay eşiği, değerlendirme raporu
 (aşağıya bakın) ile seçilir ve eşiği çağıran sistem belirler.
+
+Değerlendirmedeki otomatik onay eşiği, belge güveninin
+`min(doc_type_confidence, karşılaştırılan her alanın confidence değeri)` olduğunu varsayar. Bu nedenle
+alt akıştaki kapı da aynı toplulaştırmayı uygulamalıdır: `doc_type_confidence` ve beklenen belge türü
+(`doc_type`) dahil, yalnızca alan güvenlerine bakmak eşiğin kalibrasyonunu geçersiz kılar.
 
 ## Yapılandırma
 
@@ -109,7 +114,10 @@ Her yanıttaki `model` ve `prompt_version` alanları, değişiklik sonrası kar�
 ## Değerlendirme
 
 Manifest, satır başına bir JSON olan bir `manifest.jsonl` dosyasıdır; `image` yolu manifest dosyasına göredir.
-Gerçek değerler doğrulanmış reçeteden gelir; olmayan alan yazılmaz.
+Gerçek değerler doğrulanmış reçeteden gelir. Reçetede **olmayan** bir alan `null` olarak yazılır ve
+puanlanır (orada değer tahmin etmek yanlıştır; reçetede olmayan bir göz için de aynı kural geçerlidir:
+göz `null` ise tahmin edilen her null olmayan alan yanlış sayılır). Yalnızca siparişte bulunan ama
+reçete türüyle ilgisiz alanlar (ör. DIA'sız bir gözlük reçetesinde DIA) atlanabilir.
 
 ```json
 {"id": "r001", "image": "images/r001.jpg", "doc_type": "glasses",

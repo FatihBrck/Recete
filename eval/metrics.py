@@ -30,6 +30,20 @@ def _scored(truth_eye: dict | None):
     return [k for k in SCORED if truth_eye and k in truth_eye]
 
 
+def _spurious(p: Prediction, eye: str) -> list[tuple[str, dict]]:
+    """Gerçekte olmayan (null) gözde tahmin edilen null olmayan puanlanan alanlar."""
+    if p.error is not None or not p.response:
+        return []
+    eye_d = p.response.get(eye)
+    if not eye_d:
+        return []
+    return [
+        (k, eye_d[k])
+        for k in SCORED
+        if isinstance(eye_d.get(k), dict) and eye_d[k].get("value") is not None
+    ]
+
+
 def _pred_field(p: Prediction, eye: str, key: str) -> dict | None:
     """Tahmin alanı ({value, confidence, ...}) ya da None."""
     if p.error is not None or not p.response:
@@ -91,6 +105,11 @@ def _iter_fields(pairs):
         row_errored = p.error is not None or p.response is None
         for eye in ("right", "left"):
             truth_eye = getattr(r, eye)
+            if truth_eye is None:
+                # Reçetede olmayan göz için değer tahmin etmek yanlıştır.
+                for key, pf in _spurious(p, eye):
+                    yield (r.doc_type, eye, key, None, pf, False)
+                continue
             # Gerçekte var olan göz tahminde yoksa (null) tüm anahtarlar yanlış.
             eye_missing = bool(truth_eye) and not (p.response or {}).get(eye)
             for key in _scored(truth_eye):
@@ -162,6 +181,11 @@ def _doc_result(r: ManifestRow, p: Prediction) -> tuple[float, bool]:
         return conf, ok
     for eye in ("right", "left"):
         truth_eye = getattr(r, eye)
+        if truth_eye is None:
+            for _key, pf in _spurious(p, eye):
+                conf = min(conf, _conf(pf))
+                ok = False
+            continue
         if _scored(truth_eye) and not resp.get(eye):
             ok = False
             continue
