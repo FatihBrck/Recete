@@ -70,10 +70,58 @@ def test_per_eye_bc_not_shared():
     assert a.right.bc.shared is False and a.right.bc.confidence == 0.8
 
 
-def test_per_eye_and_shared_conflict():
-    a = assemble_lens(lens(right=lens_eye(bc=rf("8.4")), bc=rf("8.6")), lambda p: 0.9)
-    assert "right.bc: shared_conflict" in a.warnings
+def test_per_eye_and_shared_conflict_penalizes_both_eyes():
+    ex = lens(right=lens_eye(bc=rf("8.4")), left=lens_eye(sph=rf("-1.00")), bc=rf("8.6"))
+    a = assemble_lens(ex, lambda p: 0.9)
     assert a.right.bc.value == 8.4 and a.right.bc.shared is False
+    assert a.left.bc.value == 8.6 and a.left.bc.shared is True
+    assert a.right.bc.confidence == pytest.approx(0.18)
+    assert a.left.bc.confidence == pytest.approx(0.18)
+    assert a.warnings == ["right.bc: shared_conflict", "left.bc: shared_conflict"]
+
+
+def test_equal_normalized_values_no_conflict():
+    ex = lens(right=lens_eye(bc=rf("8,6")), left=lens_eye(sph=rf("-1.00")), bc=rf("8.60"))
+    a = assemble_lens(ex, lambda p: 0.9)
+    assert a.warnings == []
+    assert a.right.bc.confidence == 0.9 and a.left.bc.confidence == 0.9
+
+
+def test_conflict_penalty_not_stacked_with_format_penalty():
+    ex = lens(right=lens_eye(bc=rf("8.43")), left=lens_eye(sph=rf("-1.00")), bc=rf("8.6"))
+    a = assemble_lens(ex, lambda p: 0.9)
+    assert a.right.bc.confidence == pytest.approx(0.18)
+    assert a.left.bc.confidence == pytest.approx(0.18)
+    assert "right.bc: shared_conflict" in a.warnings and "left.bc: shared_conflict" in a.warnings
+
+
+def test_unparseable_own_vs_shared_is_conflict():
+    ex = lens(right=lens_eye(bc=rf("abc")), left=lens_eye(sph=rf("-1.00")), bc=rf("8.6"))
+    a = assemble_lens(ex, lambda p: 0.9)
+    assert a.right.bc.confidence == 0.0
+    assert a.left.bc.confidence == pytest.approx(0.18)
+    assert "left.bc: shared_conflict" in a.warnings and "right.bc: shared_conflict" in a.warnings
+
+
+def test_shared_dia_uses_shared_confidence_path():
+    conf = fake_conf({"shared_dia.raw": 0.6})
+    a = assemble_lens(lens(right=lens_eye(sph=rf("-1.00")), dia=rf("14.2")), conf)
+    assert a.right.dia.confidence == 0.6 and a.right.dia.shared
+    assert "shared_dia.raw" in conf.calls
+
+
+def test_dia_conflict_penalizes_both_eyes_bc_unaffected():
+    ex = lens(
+        right=lens_eye(dia=rf("14.0"), bc=rf("8.6")),
+        left=lens_eye(sph=rf("-1.00")),
+        bc=rf("8.6"),
+        dia=rf("14.5"),
+    )
+    a = assemble_lens(ex, lambda p: 0.9)
+    assert a.right.dia.confidence == pytest.approx(0.18)
+    assert a.left.dia.confidence == pytest.approx(0.18)
+    assert a.right.bc.confidence == 0.9 and a.left.bc.confidence == 0.9
+    assert a.warnings == ["right.dia: shared_conflict", "left.dia: shared_conflict"]
 
 
 def test_shared_not_applied_to_missing_eye():

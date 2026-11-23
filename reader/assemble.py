@@ -154,6 +154,19 @@ def _near(
     return result
 
 
+def _shared_conflict(
+    own: RawField | None, shared_raw: RawField | None, kind: Literal["bc", "dia"]
+) -> bool:
+    """True when an eye's own value and the shared value both exist and differ."""
+    own_prep = _prepare(own, kind)
+    shared_prep = _prepare(shared_raw, kind)
+    if own_prep is None or shared_prep is None:
+        return False
+    if own_prep.norm.unparseable or shared_prep.norm.unparseable:
+        return True
+    return own_prep.norm.value != shared_prep.norm.value
+
+
 def _mm_field(
     own: RawField | None,
     shared_raw: RawField | None,
@@ -161,19 +174,19 @@ def _mm_field(
     eye: str,
     conf: ConfidenceLookup,
     warnings: list[str],
+    conflict: bool = False,
 ) -> SharedFieldValue | None:
     own_prep = _prepare(own, kind)
     shared_prep = _prepare(shared_raw, kind)
     out_path = f"{eye}.{kind}"
     if own_prep is not None:
-        result = _build(
-            own_prep, out_path, f"{eye}.{kind}.raw", conf, warnings, shared=False
+        return _build(  # type: ignore[return-value]
+            own_prep, out_path, f"{eye}.{kind}.raw", conf, warnings,
+            pair_code="shared_conflict" if conflict else None, shared=False,
         )
-        if shared_prep is not None:
-            warnings.append(f"{out_path}: shared_conflict")
-        return result  # type: ignore[return-value]
     return _build(  # type: ignore[return-value]
-        shared_prep, out_path, f"shared_{kind}.raw", conf, warnings, shared=True
+        shared_prep, out_path, f"shared_{kind}.raw", conf, warnings,
+        pair_code="shared_conflict" if conflict else None, shared=True,
     )
 
 
@@ -183,6 +196,7 @@ def _assemble_eye(
     ex: LensExtraction | GlassesExtraction,
     conf: ConfidenceLookup,
     warnings: list[str],
+    conflicts: frozenset[str] = frozenset(),
 ) -> EyeResult | None:
     if eye_raw is None:
         return None
@@ -199,8 +213,11 @@ def _assemble_eye(
     f_cyl = build(cyl, "cyl", cyl_code)
     f_axis = build(axis, "axis", axis_code)
     f_add = build(add, "add")
-    f_bc = _mm_field(eye_raw.bc, ex.shared_bc, "bc", eye, conf, warnings)
-    f_dia = _mm_field(eye_raw.dia, ex.shared_dia, "dia", eye, conf, warnings)
+    f_bc = _mm_field(eye_raw.bc, ex.shared_bc, "bc", eye, conf, warnings, "bc" in conflicts
+    )
+    f_dia = _mm_field(
+        eye_raw.dia, ex.shared_dia, "dia", eye, conf, warnings, "dia" in conflicts
+    )
     if isinstance(eye_raw, LensEyeRaw):
         f_color = build(_prepare(eye_raw.color, "color"), "color")
         f_near = None
@@ -224,8 +241,16 @@ def _assemble_eye(
 
 def _assemble(ex: LensExtraction | GlassesExtraction, conf: ConfidenceLookup) -> Assembled:
     warnings: list[str] = []
-    right = _assemble_eye(ex.right, "right", ex, conf, warnings)
-    left = _assemble_eye(ex.left, "left", ex, conf, warnings)
+    conflicts = frozenset(
+        kind
+        for kind in ("bc", "dia")
+        if any(
+            e is not None and _shared_conflict(getattr(e, kind), getattr(ex, f"shared_{kind}"), kind)  # type: ignore[arg-type]
+            for e in (ex.right, ex.left)
+        )
+    )
+    right = _assemble_eye(ex.right, "right", ex, conf, warnings, conflicts)
+    left = _assemble_eye(ex.left, "left", ex, conf, warnings, conflicts)
     brand = None
     if isinstance(ex, LensExtraction) and ex.brand is not None and ex.brand.strip():
         brand = BrandValue(raw=ex.brand.strip(), confidence=float(conf("brand")))
