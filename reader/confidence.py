@@ -79,6 +79,8 @@ def leaf_spans(text: str) -> dict[str, tuple[int, int]]:
         j = i
         while j < n and text[j] not in _DELIMS:
             j += 1
+        if j == i:
+            raise ValueError(f"invalid JSON value at offset {i}")
         spans[path] = (i, j)
         return j
 
@@ -113,6 +115,11 @@ class ConfidenceMap:
         pending_start = 0
         for i, t in enumerate(tokens):
             tok = t.token
+            if not tok:
+                if not pending:
+                    pending_start = pos
+                pending.append(i)
+                continue
             if not pending and text.startswith(tok, pos):
                 offsets[i] = (pos, pos + len(tok))
                 pos += len(tok)
@@ -122,7 +129,7 @@ class ConfidenceMap:
                 if not pending:
                     return False  # characters skipped, no token covers them
                 for k in pending:
-                    offsets[k] = (pending_start, f)
+                    offsets[k] = (pending_start, f + len(tok))
                 pending = []
                 offsets[i] = (f, f + len(tok))
                 pos = f + len(tok)
@@ -133,8 +140,9 @@ class ConfidenceMap:
         if pending:
             if len(text) - pending_start > _SYNC_WINDOW:
                 return False
+            start = max(0, min(pending_start, len(text) - 1))
             for k in pending:
-                offsets[k] = (pending_start, len(text))
+                offsets[k] = (start, len(text))
         elif pos != len(text):
             return False
         self._offsets = offsets

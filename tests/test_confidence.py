@@ -84,3 +84,45 @@ def test_confidence_clamped_to_unit_interval():
                               TokenLogprob('"}', 0.0)])
     assert 0.0 <= cm.get("a") <= 1.0
     assert cm.get("a") == 1.0
+
+
+def test_stray_token_before_exact_match_lowers_confidence():
+    cm = ConfidenceMap('{"a":"1"}', toks(('{"a":"', .9), ("X", .05), ("1", .9), ('"}', .9)))
+    assert cm.get("a") == pytest.approx(.05)
+
+
+def test_stray_token_before_minus_lowers_confidence():
+    cm = ConfidenceMap('{"a":"-2"}', toks(('{"a":"', .9), ("�", .05), ("-", .9),
+                                          ("2", .9), ('"}', .9)))
+    assert cm.get("a") == pytest.approx(.05)
+
+
+def test_zero_length_token_does_not_resolve_pending():
+    cm = ConfidenceMap('{"a":"−2"}', toks(('{"a":"', .9), ("�", .05), ("", .99),
+                                          ("�", .9), ("2", .9), ('"}', .9)))
+    assert cm.available
+    assert cm.get("a") == pytest.approx(.05)
+
+
+def test_long_trailing_pending_unavailable():
+    cm = ConfidenceMap('{"a":"1234567"}', toks(('{"a":"', .9), ("�", .5)))
+    assert not cm.available
+
+
+def test_trailing_zero_length_token_keeps_confidence():
+    cm = ConfidenceMap('{"a":"1"}', toks(('{"a":"', .9), ("1", .8), ('"}', .9), ("", .01)))
+    assert cm.available
+    assert cm.get("a") == pytest.approx(.8)
+
+
+def test_product_across_fragment_span():
+    cm = ConfidenceMap('{"a":"−2"}', toks(('{"a":"', .9), ("�", .5), ("�", .7),
+                                          ("2", .95), ('"}', .9)))
+    assert cm.get("a", mode="product") == pytest.approx(.5 * .7 * .95)
+
+
+def test_leaf_spans_invalid_raises():
+    with pytest.raises(ValueError):
+        leaf_spans("[1}")
+    with pytest.raises(ValueError):
+        leaf_spans("[}")
