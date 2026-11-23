@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recete-okuyucu"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "pydantic>=2",
+    "pydantic-settings",
+    "openai>=1.40",
+    "pillow",
+    "pillow-heif",
+    "pyyaml",
+    "structlog",
+    "typer",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "respx"]
+
+[tool.setuptools.packages.find]
+include = ["reader*", "eval*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["integration: needs a running vLLM (READER_VLLM_URL)"]
+addopts = "-m 'not integration'"
