@@ -47,7 +47,7 @@ boyutu sınırı koyun, örn. nginx'te `client_max_body_size 15m;`.
   "brand": null,
   "warnings": ["left.sph: not_quarter_step"],
   "model": "qwen3-vl-8b-instruct",
-  "prompt_version": "classify-v1/glasses-v1",
+  "prompt_version": "classify-v1/glasses-v2",
   "latency_ms": 1840
 }
 ```
@@ -72,6 +72,7 @@ Uyarılar `"<yol>: <kod>"` biçimindedir ve değer içermez.
 | `axis_without_cyl` | Aks var, CYL yok |
 | `shared_conflict` | Bir gözün kendi BC/DIA değeri ile ortak (shared) değer birlikte var ve farklı; iki gözün güveni de düşürülür |
 | `confidence_unavailable` | Model logprob döndürmedi veya token hizalaması kurulamadı, güven hesaplanamadı |
+| `no_values_read` | Tür lens/gözlük olduğu halde iki gözde de hiçbir değer okunamadı (müşteri hizmetlerine) |
 
 ### Güven puanı
 
