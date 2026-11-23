@@ -106,3 +106,4 @@ class ReadResponse(BaseModel):
     model: str
     prompt_version: str
     latency_ms: int
+    stage_latency_ms: dict[str, int] = Field(default_factory=dict)  # preprocess / classify / extract

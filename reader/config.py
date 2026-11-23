@@ -1,5 +1,6 @@
 """Model configuration and versioned prompt loading."""
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -37,6 +38,8 @@ class ModelConfig(BaseModel):
     timeout_s: float
     prompt_dir: Path
     prompts: PromptNames
+    output_format: Literal["full", "compact"] = "full"
+    compact_prompts: PromptNames | None = None  # required when output_format == "compact"
 
 
 class Settings(BaseSettings):
@@ -45,6 +48,7 @@ class Settings(BaseSettings):
     models_file: Path = Path("config/models.yaml")
     active_model: str | None = None
     vllm_base_url: str | None = None  # READER_VLLM_BASE_URL overrides the YAML base_url
+    output_format: Literal["full", "compact"] | None = None  # READER_OUTPUT_FORMAT overrides the YAML
     max_upload_bytes: int = 15_000_000
 
 
@@ -72,6 +76,10 @@ def load_model_config(settings: Settings) -> ModelConfig:
         cfg = ModelConfig(**entry)
     except ValidationError as exc:
         raise ValueError(f"{path}: invalid model '{key}': {exc}") from exc
+    if settings.output_format:
+        cfg = cfg.model_copy(update={"output_format": settings.output_format})
+    if cfg.output_format == "compact" and cfg.compact_prompts is None:
+        raise ValueError(f"{path}: model '{key}' has output_format compact but no compact_prompts")
     if settings.vllm_base_url:
         cfg = cfg.model_copy(update={"base_url": settings.vllm_base_url})
     if not cfg.prompt_dir.is_absolute():
@@ -93,7 +101,9 @@ def load_prompt(path: Path) -> PromptTemplate:
 
 
 def load_prompt_set(cfg: ModelConfig) -> PromptSet:
-    names = cfg.prompts
+    names = cfg.compact_prompts if cfg.output_format == "compact" else cfg.prompts
+    if names is None:
+        raise ValueError("output_format is compact but compact_prompts is not configured")
     return PromptSet(
         **{
             field: load_prompt(cfg.prompt_dir / f"{getattr(names, field)}.md")

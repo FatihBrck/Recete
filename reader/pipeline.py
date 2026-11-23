@@ -11,6 +11,12 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from reader.assemble import Assembled, assemble_glasses, assemble_lens
+from reader.compact import (
+    GlassesExtractionCompact,
+    LensExtractionCompact,
+    full_path,
+    to_full,
+)
 from reader.config import ModelConfig, PromptSet, PromptTemplate
 from reader.confidence import ConfidenceMap
 from reader.llm_client import LLMResult, OutputParseError, VLMClient
@@ -26,6 +32,10 @@ M = TypeVar("M", bound=BaseModel)
 
 CONFIDENCE_UNAVAILABLE = "confidence_unavailable"
 NO_VALUES_READ = "no_values_read"
+
+
+def _ms_since(t0: float) -> int:
+    return int((time.perf_counter() - t0) * 1000)
 
 
 def _zero(_path: str) -> float:
@@ -78,10 +88,13 @@ class ReaderPipeline:
         image_b64 = await asyncio.to_thread(
             _preprocess, image_bytes, self._cfg.max_image_pixels
         )
+        stages = {"preprocess": _ms_since(started)}
         warnings: list[str] = []
         unavailable = False
 
+        t = time.perf_counter()
         cls_result = await self._call(self._prompts.classify, Classification, image_b64)
+        stages["classify"] = _ms_since(t)
         classification = _parse(Classification, cls_result)
         cls_conf = _confidence(cls_result)
         if cls_conf is None:
@@ -95,27 +108,34 @@ class ReaderPipeline:
         prompt_version = self._prompts.classify.version
 
         if doc_type != "other":
-            if doc_type == "lens_printed":
-                template, schema = self._prompts.lens_printed, LensExtraction
-            elif doc_type == "lens_handwritten":
-                template, schema = self._prompts.lens_handwritten, LensExtraction
+            compact = self._cfg.output_format == "compact"
+            is_glasses = doc_type == "glasses"
+            if is_glasses:
+                template = self._prompts.glasses
+                schema = GlassesExtractionCompact if compact else GlassesExtraction
             else:
-                template, schema = self._prompts.glasses, GlassesExtraction
+                template = getattr(self._prompts, doc_type)
+                schema = LensExtractionCompact if compact else LensExtraction
             prompt_version = f"{self._prompts.classify.version}/{template.version}"
 
+            t = time.perf_counter()
             ext_result = await self._call(template, schema, image_b64)
+            stages["extract"] = _ms_since(t)
             extraction = _parse(schema, ext_result)
+            if compact:
+                extraction = to_full(extraction)
             ext_conf = _confidence(ext_result)
             if ext_conf is None:
                 unavailable = True
                 lookup = _zero
+            elif compact:
+                lookup = lambda path, _c=ext_conf: _c.get(full_path(path))  # noqa: E731
             else:
                 lookup = ext_conf.get
-            if isinstance(extraction, LensExtraction):
-                assembled = assemble_lens(extraction, lookup)
-            else:
-                assert isinstance(extraction, GlassesExtraction)
+            if is_glasses:
                 assembled = assemble_glasses(extraction, lookup)
+            else:
+                assembled = assemble_lens(extraction, lookup)
             warnings.extend(assembled.warnings)
             if assembled.right is None and assembled.left is None:
                 # A lens/glasses prescription with nothing read must be visibly flagged.
@@ -134,5 +154,6 @@ class ReaderPipeline:
             warnings=warnings,
             model=self._cfg.name,
             prompt_version=prompt_version,
-            latency_ms=int((time.perf_counter() - started) * 1000),
+            latency_ms=_ms_since(started),
+            stage_latency_ms=stages,
         )

@@ -48,6 +48,7 @@ boyutu sınırı koyun, örn. nginx'te `client_max_body_size 15m;`.
   "warnings": ["left.sph: not_quarter_step"],
   "model": "qwen3-vl-8b-instruct",
   "prompt_version": "classify-v1/glasses-v2",
+  "stage_latency_ms": {"preprocess": 40, "classify": 900, "extract": 9000},
   "latency_ms": 1840
 }
 ```
@@ -94,6 +95,7 @@ Ortam değişkenleri:
 | `READER_MODELS_FILE` | `config/models.yaml` | Model kayıt dosyası |
 | `READER_ACTIVE_MODEL` | dosyadaki `active` | Kullanılacak model anahtarı |
 | `READER_MAX_UPLOAD_BYTES` | `15000000` | Yükleme sınırı |
+| `READER_OUTPUT_FORMAT` | dosyadaki `output_format` (`full`) | `compact`: model değerleri düz metin ve belge bazında tek `handwritten` ile yazar (~%35-40 daha az çıktı, daha hızlı); API yanıtı aynı kalır |
 | `READER_VLLM_BASE_URL` | dosyadaki `base_url` | vLLM adresini geçersiz kılar (ör. Colab'da `http://localhost:8000/v1`) |
 
 ### Model değiştirme
@@ -159,6 +161,18 @@ READER_VLLM_URL=http://localhost:8000/v1 pytest -m integration -v
 `READER_VLLM_URL` tanımlı değilse bu testler atlanır. Her isteğin 60 sn altında kalması hedeflenir
 (`latency_ms` alanına bakın). Bu yüzden `config/models.yaml` içinde `timeout_s` 28 sn'dir: iki ardışık
 model çağrısı (sınıflandırma + okuma) en kötü durumda bile 60 sn hedefinin altında kalır.
+
+### Hız
+
+L4'te süreyi belirleyen, modelin çıktıyı token token üretmesidir (bf16 8B için saniyede ~15-20 token).
+Yanıttaki `stage_latency_ms` sürenin ön işleme, sınıflandırma ve okuma arasında nasıl dağıldığını gösterir.
+İki hızlandırma seçeneği vardır, ikisi de açılıp kapatılabilir:
+
+- **FP8:** vLLM'e `--quantization fp8` (bkz. `docker-compose.yml`). ~1,6-2× daha hızlı üretim.
+- **Kısa çıktı:** `READER_OUTPUT_FORMAT=compact`. Okuma çıktısı ~%35-40 kısalır; kayıp: `handwritten` alan
+  bazında değil belge bazında olur.
+
+Açmadan önce aynı değerlendirme setinde `python -m eval.run_eval compare` ile doğruluğu karşılaştırın.
 
 ### Colab ile test
 
