@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     models_file: Path = Path("config/models.yaml")
     active_model: str | None = None
+    vllm_base_url: str | None = None  # READER_VLLM_BASE_URL overrides the YAML base_url
     max_upload_bytes: int = 15_000_000
 
 
@@ -71,6 +72,8 @@ def load_model_config(settings: Settings) -> ModelConfig:
         cfg = ModelConfig(**entry)
     except ValidationError as exc:
         raise ValueError(f"{path}: invalid model '{key}': {exc}") from exc
+    if settings.vllm_base_url:
+        cfg = cfg.model_copy(update={"base_url": settings.vllm_base_url})
     if not cfg.prompt_dir.is_absolute():
         cfg = cfg.model_copy(update={"prompt_dir": path.parent / cfg.prompt_dir})
     return cfg

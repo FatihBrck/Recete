@@ -93,6 +93,7 @@ Ortam değişkenleri:
 | `READER_MODELS_FILE` | `config/models.yaml` | Model kayıt dosyası |
 | `READER_ACTIVE_MODEL` | dosyadaki `active` | Kullanılacak model anahtarı |
 | `READER_MAX_UPLOAD_BYTES` | `15000000` | Yükleme sınırı |
+| `READER_VLLM_BASE_URL` | dosyadaki `base_url` | vLLM adresini geçersiz kılar (ör. Colab'da `http://localhost:8000/v1`) |
 
 ### Model değiştirme
 
@@ -157,6 +158,14 @@ READER_VLLM_URL=http://localhost:8000/v1 pytest -m integration -v
 `READER_VLLM_URL` tanımlı değilse bu testler atlanır. Her isteğin 60 sn altında kalması hedeflenir
 (`latency_ms` alanına bakın). Bu yüzden `config/models.yaml` içinde `timeout_s` 28 sn'dir: iki ardışık
 model çağrısı (sınıflandırma + okuma) en kötü durumda bile 60 sn hedefinin altında kalır.
+
+### Colab ile test
+
+`colab/test_l4.ipynb` notebook'u sunucudaki GPU'nun aynısıyla (Colab Pro, **L4**) deneme yapar: vLLM'i ayrı
+bir sanal ortamda başlatır, iki örnek reçeteyle entegrasyon testlerini çalıştırır, okuyucu servisini açar ve
+kendi görselinizi yüklemenize izin verir. Colab'da Docker olmadığı için compose kullanılmaz; ayarlar
+`docker-compose.yml` ile aynıdır. T4'te 8B model sığmaz. Colab'a yüklenen görseller Google'ın bulutuna gider
+(KVKK): yalnızca karartılmış örneklerle deneyin.
 
 ## KVKK notu
 

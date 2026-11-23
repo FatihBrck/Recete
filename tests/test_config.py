@@ -56,6 +56,18 @@ def test_active_override_via_env(models_file, monkeypatch):
     assert cfg.model == "Other/Model"
 
 
+def test_vllm_base_url_env_overrides_yaml(models_file, monkeypatch):
+    monkeypatch.setenv("READER_VLLM_BASE_URL", "http://localhost:8000/v1")
+    cfg = load_model_config(Settings(models_file=models_file))
+    assert cfg.base_url == "http://localhost:8000/v1"
+
+
+def test_base_url_from_yaml_without_override(models_file, monkeypatch):
+    monkeypatch.delenv("READER_VLLM_BASE_URL", raising=False)
+    cfg = load_model_config(Settings(models_file=models_file))
+    assert cfg.base_url == "http://vllm:8000/v1"
+
+
 def test_max_upload_bytes_env(monkeypatch):
     monkeypatch.setenv("READER_MAX_UPLOAD_BYTES", "123")
     assert Settings().max_upload_bytes == 123
