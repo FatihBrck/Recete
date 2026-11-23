@@ -83,7 +83,10 @@ def load_prompt(path: Path) -> PromptTemplate:
     system, sep, user = text.partition(USER_MARKER)
     if not sep:
         raise ValueError(f"{path}: missing '{USER_MARKER}' separator")
-    return PromptTemplate(version=path.stem, system=system.strip(), user=user.strip())
+    system, user = system.strip(), user.strip()
+    if not system or not user:
+        raise ValueError(f"{path}: system and user sections must both be non-empty")
+    return PromptTemplate(version=path.stem, system=system, user=user)
 
 
 def load_prompt_set(cfg: ModelConfig) -> PromptSet:

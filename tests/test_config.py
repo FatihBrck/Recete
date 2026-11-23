@@ -126,3 +126,19 @@ def test_repo_prompts_never_mention_order_and_versions():
     for p in (ps.classify, ps.lens_printed, ps.lens_handwritten, ps.glasses):
         assert "sipariş" not in p.user.lower()
         assert p.user
+
+
+@pytest.mark.parametrize("text", ["=== USER ===\nUSR", "SYS\n=== USER ===\n  "])
+def test_load_prompt_empty_section_raises(tmp_path, text):
+    p = tmp_path / "x-v1.md"
+    p.write_text(text)
+    with pytest.raises(ValueError):
+        load_prompt(p)
+
+
+def test_repo_prompts_have_no_grid_hint_and_keep_signs():
+    ps = load_prompt_set(load_model_config(Settings()))
+    for p in (ps.lens_printed, ps.lens_handwritten, ps.glasses):
+        assert "0,25" not in p.system and "basamak" not in p.system
+        assert "çevirme" in p.system
+    assert "ayrı ayrı aynı değer yazılıysa" in ps.lens_printed.system
