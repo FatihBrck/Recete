@@ -25,6 +25,7 @@ from reader.schemas import (
 M = TypeVar("M", bound=BaseModel)
 
 CONFIDENCE_UNAVAILABLE = "confidence_unavailable"
+NO_VALUES_READ = "no_values_read"
 
 
 def _zero(_path: str) -> float:
@@ -116,6 +117,9 @@ class ReaderPipeline:
                 assert isinstance(extraction, GlassesExtraction)
                 assembled = assemble_glasses(extraction, lookup)
             warnings.extend(assembled.warnings)
+            if assembled.right is None and assembled.left is None:
+                # A lens/glasses prescription with nothing read must be visibly flagged.
+                warnings.append(NO_VALUES_READ)
 
         if unavailable:
             warnings.append(CONFIDENCE_UNAVAILABLE)

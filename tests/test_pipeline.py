@@ -65,7 +65,7 @@ async def test_glasses_uses_glasses_prompt_and_schema(cfg, prompts):
     assert fake.calls[1]["schema_name"] == "GlassesExtraction"
     assert fake.calls[1]["system"] == prompts.glasses.system
     assert fake.calls[1]["user"] == prompts.glasses.user
-    assert r.prompt_version == "classify-v1/glasses-v1"
+    assert r.prompt_version == "classify-v1/glasses-v2"
 
 
 async def test_lens_handwritten_uses_handwritten_prompt_with_lens_schema(cfg, prompts):
@@ -73,7 +73,7 @@ async def test_lens_handwritten_uses_handwritten_prompt_with_lens_schema(cfg, pr
     r = await p.read(png_bytes())
     assert fake.calls[1]["schema_name"] == "LensExtraction"
     assert fake.calls[1]["system"] == prompts.lens_handwritten.system
-    assert r.prompt_version == "classify-v1/lens_handwritten-v1"
+    assert r.prompt_version == "classify-v1/lens_handwritten-v2"
 
 
 async def test_lens_printed_assembles_fields(cfg, prompts):
@@ -147,3 +147,22 @@ async def test_response_metadata(cfg, prompts):
 async def test_health_delegates(cfg, prompts):
     p = ReaderPipeline(FakeVLMClient([], healthy=False), cfg, prompts)
     assert await p.health() is False
+
+
+async def test_no_values_read_warning_when_both_eyes_empty(cfg, prompts):
+    p, fake = make(cfg, prompts, [res(CLS_GLASSES), res(GLASSES_EMPTY)])
+    r = await p.read(png_bytes())
+    assert r.right is None and r.left is None
+    assert "no_values_read" in r.warnings
+
+
+async def test_no_values_read_absent_when_values_present(cfg, prompts):
+    p, fake = make(cfg, prompts, [res(CLS_PRINTED), res(LENS_SPH)])
+    r = await p.read(png_bytes())
+    assert "no_values_read" not in r.warnings
+
+
+async def test_no_values_read_absent_for_other(cfg, prompts):
+    p, fake = make(cfg, prompts, [res(CLS_OTHER)])
+    r = await p.read(png_bytes())
+    assert "no_values_read" not in r.warnings

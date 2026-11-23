@@ -134,7 +134,7 @@ def test_repo_prompts_cover_required_facts():
 def test_repo_prompts_never_mention_order_and_versions():
     ps = load_prompt_set(load_model_config(Settings()))
     assert ps.classify.version == "classify-v1"
-    assert ps.glasses.version == "glasses-v1"
+    assert ps.glasses.version == "glasses-v2"
     for p in (ps.classify, ps.lens_printed, ps.lens_handwritten, ps.glasses):
         assert "sipariş" not in p.user.lower()
         assert p.user
@@ -153,4 +153,13 @@ def test_repo_prompts_have_no_grid_hint_and_keep_signs():
     for p in (ps.lens_printed, ps.lens_handwritten, ps.glasses):
         assert "0,25" not in p.system and "basamak" not in p.system
         assert "çevirme" in p.system
-    assert "ayrı ayrı aynı değer yazılıysa" in ps.lens_printed.system
+    assert "ayrı ayrı yazılmışsa" in ps.lens_printed.system
+
+
+def test_repo_read_prompts_v2_rules():
+    ps = load_prompt_set(load_model_config(Settings()))
+    for p in (ps.lens_printed, ps.lens_handwritten, ps.glasses):
+        assert "İmza" in p.system          # signatures/strokes elsewhere do not cancel values
+        assert "aralık" in p.system        # ranges like 8.4-8.6 kept as written
+        assert "o göz null olamaz" in p.system
+    assert "aynı değer olsa bile" in ps.lens_printed.system
