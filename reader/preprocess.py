@@ -3,7 +3,6 @@
 import base64
 import io
 import math
-import warnings
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
@@ -19,18 +18,20 @@ class UnsupportedImageError(Exception):
 
 def load_image(data: bytes) -> Image.Image:
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(data)) as img:
-                fmt = img.format
-                if fmt not in _ACCEPTED_FORMATS:
-                    raise UnsupportedImageError(f"unsupported image format: {fmt}")
-                img.load()
-                img = ImageOps.exif_transpose(img)
-                return img.convert("RGB")
+        with Image.open(io.BytesIO(data)) as img:
+            fmt = img.format
+            if fmt not in _ACCEPTED_FORMATS:
+                raise UnsupportedImageError(f"unsupported image format: {fmt}")
+            limit = Image.MAX_IMAGE_PIXELS
+            # Explicit check (thread-safe; no process-global warning filters).
+            if limit is not None and img.width * img.height > limit:
+                raise UnsupportedImageError("image exceeds pixel limit")
+            img.load()
+            img = ImageOps.exif_transpose(img)
+            return img.convert("RGB")
     except UnsupportedImageError:
         raise
-    except (UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError, SyntaxError, EOFError) as exc:
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError, SyntaxError, EOFError) as exc:
         raise UnsupportedImageError(f"cannot decode image: {type(exc).__name__}") from exc
 
 

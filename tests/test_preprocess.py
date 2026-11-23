@@ -71,6 +71,28 @@ def test_decompression_bomb_rejected(monkeypatch):
         load_image(data)
 
 
+@pytest.mark.filterwarnings("ignore::PIL.Image.DecompressionBombWarning")
+def test_warning_band_image_rejected_by_explicit_check(monkeypatch):
+    # 1x-2x the limit: Pillow would only warn; we must reject explicitly.
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 7000)
+    data = _encode(Image.new("RGB", (100, 100)), "PNG")  # 10000 px
+    with pytest.raises(UnsupportedImageError, match="pixel limit"):
+        load_image(data)
+
+
+def test_hard_bomb_error_still_mapped(monkeypatch):
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
+    data = _encode(Image.new("RGB", (100, 100)), "PNG")  # >2x: Pillow raises itself
+    with pytest.raises(UnsupportedImageError):
+        load_image(data)
+
+
+def test_image_at_limit_accepted(monkeypatch):
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10000)
+    data = _encode(Image.new("RGB", (100, 100)), "PNG")
+    assert load_image(data).size == (100, 100)
+
+
 def test_fit_max_pixels_downscales():
     out = fit_max_pixels(Image.new("RGB", (4000, 3000)), 1_638_400)
     w, h = out.size
