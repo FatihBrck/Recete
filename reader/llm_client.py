@@ -141,6 +141,9 @@ class OpenAICompatClient:
         tokens = [TokenLogprob(t.token, t.logprob) for t in content or []]
         return LLMResult(text=text, tokens=tokens)
 
+    async def aclose(self) -> None:
+        await self._client.close()
+
     async def health(self) -> bool:
         try:
             await self._client.models.list()

@@ -148,3 +148,10 @@ async def test_health_true_and_false():
     with respx.mock(base_url=BASE) as mock:
         mock.get("/models").mock(side_effect=httpx.ConnectError("x"))
         assert await make_client().health() is False
+
+
+async def test_aclose_closes_http_client():
+    client = make_client()
+    assert not client._client.is_closed()
+    await client.aclose()
+    assert client._client.is_closed()
