@@ -67,7 +67,11 @@ def report(
     aa = auto_approve(rows, preds)
     lat = latency(preds)
 
+    ids = {p.id for p in preds}
+    n_missing = sum(1 for r in rows if r.id not in ids)
+    n_error = sum(1 for p in preds if p.error is not None or p.response is None)
     md = [f"# Değerlendirme raporu ({len(rows)} reçete)", ""]
+    md += [f"Hatalı satır: {n_error} · Tahmini eksik satır: {n_missing}", ""]
     md += ["## Sınıflandırma", "", f"Doğruluk: **{_pct(cls_acc)}**", ""]
     md += ["| Gerçek | Tahmin | Sayı |", "|---|---|---|"]
     for (t, p), c in sorted(confusion.items()):
@@ -83,17 +87,25 @@ def report(
     for k in sorted(fields):
         v = fields[k]
         md.append(f"| {k} | {int(v['n'])} | {_pct(v['exact'])} | {_pct(v['tolerant'])} |")
-    md += ["", "## Kalibrasyon", "", "| Güven aralığı | n | doğruluk |", "|---|---|---|"]
+    md += ["", "## Kalibrasyon", "",
+           "Not: bc/dia karşılaştırması toleranslıdır (±0.2).", "",
+           "| Güven aralığı | n | doğruluk |", "|---|---|---|"]
     for b in calib:
         md.append(f"| {b['bin']} | {b['n']} | {_pct(b['accuracy'])} |")
     thr = "-" if aa["threshold"] is None else f"{aa['threshold']:.3f}"
+    if aa["threshold"] is None and aa["n"]:
+        thr_lines = ["- Hiçbir eşik koşulu sağlamıyor (en yüksek güvenli belge yanlış)",
+                     f"- Toplam yanlış: {aa['n_wrong']} / {aa['n']} belge"]
+    else:
+        thr_lines = [f"- Eşik: {thr}"]
     md += [
         "",
         "## Otomatik onay oranı",
         "",
-        f"- Eşik: {thr}",
+        *thr_lines,
         f"- Otomatik onay oranı: **{_pct(aa['auto_approve_rate'])}**",
-        f"- Eşik üstündeki yanlış: {aa['wrong_above']} / {aa['n_wrong']} (toplam {aa['n']} belge)",
+        *([] if aa["threshold"] is None and aa["n"] else
+          [f"- Eşik üstündeki yanlış: {aa['wrong_above']} / {aa['n_wrong']} (toplam {aa['n']} belge)"]),
         "",
         "## Gecikme",
         "",

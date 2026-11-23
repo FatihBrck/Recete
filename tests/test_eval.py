@@ -47,8 +47,39 @@ def test_null_truth_and_null_eye_prediction():
     rows = [row("a", right={"add": None, "sph": -1.0})]
     preds = [pred("a", resp(right=None))]
     acc = field_accuracy(rows, preds)
-    assert acc["all.add"]["exact"] == 1.0
+    assert acc["all.add"]["exact"] == 0.0
     assert acc["all.sph"]["exact"] == 0.0
+    assert auto_approve(rows, preds)["n_wrong"] == 1
+
+
+def test_null_truth_correct_when_eye_present():
+    rows = [row("a", right={"add": None})]
+    preds = [pred("a", resp(right={"add": None}))]
+    assert field_accuracy(rows, preds)["all.add"]["exact"] == 1.0
+
+
+def test_null_eye_with_only_null_truth_doc_wrong():
+    rows = [row("a", right={"add": None})]
+    assert auto_approve(rows, [pred("a", resp(right=None))])["n_wrong"] == 1
+
+
+def test_no_qualifying_threshold():
+    rows = [row("a", right={"sph": -1.0}), row("b", right={"sph": -1.0})]
+    preds = [pred("a", resp(dconf=.99, right={"sph": f(-2.0, .99)})),
+             pred("b", resp(dconf=.5, right={"sph": f(-1.0, .5)}))]
+    r = auto_approve(rows, preds)
+    assert r["n_wrong"] == 1 and r["threshold"] is None and r["auto_approve_rate"] == 0.0
+
+
+def test_calibration_null_and_out_of_range_confidence():
+    rows = [row(str(i), right={"sph": -1.0}) for i in range(3)]
+    preds = [pred("0", resp(right={"sph": {"value": -1.0, "confidence": None}})),
+             pred("1", resp(right={"sph": f(-1.0, 1.5)})),
+             pred("2", resp(right={"sph": f(-2.0, -0.1)}))]
+    bins = {b["bin"]: b for b in calibration(rows, preds)}
+    assert bins["[0, 0.5)"]["n"] == 1
+    assert bins["aralık dışı"]["n"] == 2 and bins["aralık dışı"]["accuracy"] == 0.5
+    assert auto_approve(rows, preds)["n"] == 3
 
 
 def test_color_case_insensitive():
@@ -162,6 +193,7 @@ def test_report_cli_writes_markdown(tmp_path):
     for h in ("Sınıflandırma", "Alan doğruluğu", "Kalibrasyon", "Otomatik onay oranı", "Gecikme",
               "**Gözlük BC:**"):
         assert h in text
+    assert "Hatalı satır: 1" in text and "bc/dia karşılaştırması toleranslıdır" in text
     assert (tmp_path / "out/fields.csv").read_text().startswith("field,n,exact,tolerant")
 
 
@@ -172,3 +204,15 @@ def test_compare_cli(tmp_path):
                              "error": None}) + "\n")
     r = CliRunner().invoke(app, ["compare", "--manifest", str(m), str(p), str(p)])
     assert r.exit_code == 0 and "Otomatik onay oranı" in r.output
+
+
+def test_report_no_threshold_line(tmp_path):
+    m = _write_manifest(tmp_path)
+    p = tmp_path / "p.jsonl"
+    p.write_text(json.dumps({"id": "r1", "response": resp(right={"sph": f(-9.0)}),
+                             "error": None}) + "\n")
+    r = CliRunner().invoke(app, ["report", "--manifest", str(m), "--predictions", str(p),
+                                 "--out", str(tmp_path / "o")])
+    text = (tmp_path / "o/report.md").read_text()
+    assert r.exit_code == 0 and "Hiçbir eşik koşulu sağlamıyor" in text
+    assert "Tahmini eksik satır: 1" in text
