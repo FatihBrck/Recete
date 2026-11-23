@@ -1,0 +1,41 @@
+services:
+  vllm:
+    # Etiket sabitlenmiştir (latest kullanılmaz). Yükseltirken bayrak sözdizimini
+    # `docker run --rm vllm/vllm-openai:<etiket> --help` çıktısıyla doğrulayın.
+    image: vllm/vllm-openai:v0.34.0
+    command: >
+      --model Qwen/Qwen3-VL-8B-Instruct
+      --dtype bfloat16
+      --max-model-len 8192
+      --gpu-memory-utilization 0.92
+      --max-num-seqs 4
+      --limit-mm-per-prompt '{"image":1,"video":0}'
+    ipc: host
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/v1/models > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+    restart: unless-stopped
+
+  reader:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

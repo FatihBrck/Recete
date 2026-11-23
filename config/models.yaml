@@ -1,0 +1,12 @@
+active: qwen3-vl-8b
+models:
+  qwen3-vl-8b:
+    name: qwen3-vl-8b-instruct
+    base_url: http://vllm:8000/v1
+    model: Qwen/Qwen3-VL-8B-Instruct
+    max_image_pixels: 1638400   # ~1280x1280
+    max_tokens: 1024
+    timeout_s: 28   # iki ardışık çağrı (sınıflandırma + okuma) 60 sn hedefinin altında kalsın
+    prompt_dir: prompts/qwen3-vl
+    prompts: {classify: classify-v1, lens_printed: lens_printed-v1,
+              lens_handwritten: lens_handwritten-v1, glasses: glasses-v1}
