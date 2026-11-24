@@ -10,3 +10,8 @@ models:
     prompt_dir: prompts/qwen3-vl
     prompts: {classify: classify-v1, lens_printed: lens_printed-v2,
               lens_handwritten: lens_handwritten-v2, glasses: glasses-v2}
+    # full: her alan {raw, handwritten}; compact: değerler düz metin + belge bazında tek
+    # handwritten (~%35-40 daha az çıktı token'ı, daha hızlı). READER_OUTPUT_FORMAT ile değiştirilebilir.
+    output_format: full
+    compact_prompts: {classify: classify-v1, lens_printed: lens_printed-v2c,
+                      lens_handwritten: lens_handwritten-v2c, glasses: glasses-v2c}

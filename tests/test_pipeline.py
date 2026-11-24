@@ -166,3 +166,29 @@ async def test_no_values_read_absent_for_other(cfg, prompts):
     p, fake = make(cfg, prompts, [res(CLS_OTHER)])
     r = await p.read(png_bytes())
     assert "no_values_read" not in r.warnings
+
+
+LENS_COMPACT = ('{"handwritten":true,"right":{"sph":"-3,00","cyl":null,"axis":null,"add":null,'
+                '"bc":"8.4","dia":null,"color":null},"left":null,"shared_bc":null,"shared_dia":null,'
+                '"brand":null}')
+
+
+async def test_compact_output_format(cfg, monkeypatch):
+    monkeypatch.setenv("READER_OUTPUT_FORMAT", "compact")
+    ccfg = load_model_config(Settings())
+    cprompts = load_prompt_set(ccfg)
+    p, fake = make(ccfg, cprompts, [res(CLS_PRINTED), res(LENS_COMPACT)])
+    r = await p.read(png_bytes())
+    assert fake.calls[1]["schema_name"] == "LensExtractionCompact"
+    assert r.prompt_version == "classify-v1/lens_printed-v2c"
+    assert r.right.sph.value == -3.0 and r.right.sph.raw == "-3,00"
+    assert r.right.sph.handwritten is True and r.right.bc.shared is False
+    assert r.right.sph.confidence > 0.9          # compact leaf paths still found
+    assert "confidence_unavailable" not in r.warnings
+
+
+async def test_stage_latencies_reported(cfg, prompts):
+    p, fake = make(cfg, prompts, [res(CLS_PRINTED), res(LENS_SPH)])
+    r = await p.read(png_bytes())
+    assert set(r.stage_latency_ms) == {"preprocess", "classify", "extract"}
+    assert all(v >= 0 for v in r.stage_latency_ms.values())

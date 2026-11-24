@@ -163,3 +163,26 @@ def test_repo_read_prompts_v2_rules():
         assert "aralık" in p.system        # ranges like 8.4-8.6 kept as written
         assert "o göz null olamaz" in p.system
     assert "aynı değer olsa bile" in ps.lens_printed.system
+
+
+def test_output_format_defaults_to_full():
+    cfg = load_model_config(Settings())
+    assert cfg.output_format == "full"
+    assert load_prompt_set(cfg).lens_printed.version == "lens_printed-v2"
+
+
+def test_output_format_env_selects_compact_prompts(monkeypatch):
+    monkeypatch.setenv("READER_OUTPUT_FORMAT", "compact")
+    cfg = load_model_config(Settings())
+    assert cfg.output_format == "compact"
+    ps = load_prompt_set(cfg)
+    assert ps.lens_printed.version == "lens_printed-v2c"
+    assert ps.glasses.version == "glasses-v2c"
+    for p in (ps.lens_printed, ps.lens_handwritten, ps.glasses):
+        assert "raw" not in p.system
+        assert "Belge için tek" in p.system
+
+
+def test_compact_without_compact_prompts_raises(models_file):
+    with pytest.raises(ValueError):
+        load_model_config(Settings(models_file=models_file, output_format="compact"))

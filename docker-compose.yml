@@ -3,6 +3,8 @@ services:
     # Etiket sabitlenmiştir (latest kullanılmaz). Yükseltirken bayrak sözdizimini
     # `docker run --rm vllm/vllm-openai:<etiket> --help` çıktısıyla doğrulayın.
     image: vllm/vllm-openai:v0.34.0
+    # Hız için FP8 (L4 donanımda destekler, ~1,6-2x daha hızlı üretim): aşağıdaki listeye
+    # `--quantization fp8` satırını ekleyin. Önce değerlendirme setiyle doğruluğu karşılaştırın.
     command: >
       --model Qwen/Qwen3-VL-8B-Instruct
       --dtype bfloat16
