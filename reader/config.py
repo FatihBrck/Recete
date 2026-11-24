@@ -40,6 +40,9 @@ class ModelConfig(BaseModel):
     prompts: PromptNames
     output_format: Literal["full", "compact"] = "full"
     compact_prompts: PromptNames | None = None  # required when output_format == "compact"
+    # Extra request fields sent to the OpenAI-compatible API, e.g.
+    # {"chat_template_kwargs": {"enable_thinking": false}} for models that think by default.
+    extra_body: dict = {}
 
 
 class Settings(BaseSettings):

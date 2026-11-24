@@ -155,3 +155,21 @@ async def test_aclose_closes_http_client():
     assert not client._client.is_closed()
     await client.aclose()
     assert client._client.is_closed()
+
+
+async def test_extra_body_forwarded_to_request():
+    client = OpenAICompatClient(base_url=BASE, model=MODEL, max_tokens=256, timeout_s=5.0,
+                                extra_body={"chat_template_kwargs": {"enable_thinking": False}})
+    with respx.mock(base_url=BASE) as mock:
+        route = mock.post("/chat/completions").respond(200, json=completion(TEXT, lp_content([(TEXT, -0.1)])))
+        await call(client)
+    body = json.loads(route.calls.last.request.content)
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert body["temperature"] == 0            # extra_body never overrides core params
+
+
+async def test_no_extra_body_by_default():
+    with respx.mock(base_url=BASE) as mock:
+        route = mock.post("/chat/completions").respond(200, json=completion(TEXT, lp_content([(TEXT, -0.1)])))
+        await call(make_client())
+    assert "chat_template_kwargs" not in json.loads(route.calls.last.request.content)

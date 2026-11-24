@@ -15,3 +15,34 @@ models:
     output_format: full
     compact_prompts: {classify: classify-v1, lens_printed: lens_printed-v2c,
                       lens_handwritten: lens_handwritten-v2c, glasses: glasses-v2c}
+
+  # Karşılaştırma için ek modeller (aynı prompt'lar). Seçmek için: active veya READER_ACTIVE_MODEL.
+  # vLLM'i ilgili model adıyla başlatın (bkz. README "Model karşılaştırma").
+  qwen3.5-9b:
+    name: qwen3.5-9b
+    base_url: http://vllm:8000/v1
+    model: Qwen/Qwen3.5-9B
+    max_image_pixels: 1638400
+    max_tokens: 1024
+    timeout_s: 28
+    prompt_dir: prompts/qwen3-vl
+    prompts: {classify: classify-v1, lens_printed: lens_printed-v2,
+              lens_handwritten: lens_handwritten-v2, glasses: glasses-v2}
+    output_format: full
+    compact_prompts: {classify: classify-v1, lens_printed: lens_printed-v2c,
+                      lens_handwritten: lens_handwritten-v2c, glasses: glasses-v2c}
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}   # Qwen3.5 varsayılan olarak "düşünür"
+
+  medgemma-1.5-4b:
+    name: medgemma-1.5-4b-it
+    base_url: http://vllm:8000/v1
+    model: google/medgemma-1.5-4b-it   # erişimi kısıtlı: HF'de şartları kabul edin, HF_TOKEN gerekir
+    max_image_pixels: 1638400
+    max_tokens: 1024
+    timeout_s: 28
+    prompt_dir: prompts/qwen3-vl
+    prompts: {classify: classify-v1, lens_printed: lens_printed-v2,
+              lens_handwritten: lens_handwritten-v2, glasses: glasses-v2}
+    output_format: full
+    compact_prompts: {classify: classify-v1, lens_printed: lens_printed-v2c,
+                      lens_handwritten: lens_handwritten-v2c, glasses: glasses-v2c}

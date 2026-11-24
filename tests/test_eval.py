@@ -243,3 +243,26 @@ def test_report_no_threshold_line(tmp_path):
     text = (tmp_path / "o/report.md").read_text()
     assert r.exit_code == 0 and "Hiçbir eşik koşulu sağlamıyor" in text
     assert "Tahmini eksik satır: 1" in text
+
+
+def _one_pred(tmp_path, name):
+    p = tmp_path / name
+    p.write_text(json.dumps({"id": "r1", "response": resp(right={"sph": f(-1.0)}),
+                             "error": None}) + "\n")
+    return str(p)
+
+
+def test_compare_cli_three_files(tmp_path):
+    m = _write_manifest(tmp_path)
+    names = [_one_pred(tmp_path, n) for n in ("qwen.jsonl", "gemma.jsonl", "q35.jsonl")]
+    r = CliRunner().invoke(app, ["compare", "--manifest", str(m), *names])
+    assert r.exit_code == 0, r.output
+    header, sep = r.output.splitlines()[:2]
+    assert "qwen.jsonl" in header and "gemma.jsonl" in header and "q35.jsonl" in header
+    assert sep.count("---") == 4
+
+
+def test_compare_needs_two_files(tmp_path):
+    m = _write_manifest(tmp_path)
+    r = CliRunner().invoke(app, ["compare", "--manifest", str(m), _one_pred(tmp_path, "a.jsonl")])
+    assert r.exit_code != 0
