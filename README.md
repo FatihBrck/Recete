@@ -135,7 +135,7 @@ python -m eval.run_eval run --manifest testset/manifest.jsonl --url http://local
 # 2) Rapor üret (report.md + fields.csv)
 python -m eval.run_eval report --manifest testset/manifest.jsonl --predictions reports/run1.jsonl --out reports/run1
 # 3) İki koşuyu (model/prompt değişikliği) yan yana karşılaştır
-python -m eval.run_eval compare reports/run1.jsonl reports/run2.jsonl --manifest testset/manifest.jsonl
+python -m eval.run_eval compare reports/run1.jsonl reports/run2.jsonl [reports/run3.jsonl ...] --manifest testset/manifest.jsonl
 ```
 
 Rapor: tür bazında sınıflandırma ve karışıklık matrisi, alan doğruluğu (gözlük BC ayrıca; BC/DIA hem birebir
@@ -173,6 +173,21 @@ Yanıttaki `stage_latency_ms` sürenin ön işleme, sınıflandırma ve okuma ar
   bazında değil belge bazında olur.
 
 Açmadan önce aynı değerlendirme setinde `python -m eval.run_eval compare` ile doğruluğu karşılaştırın.
+
+### Model karşılaştırma
+
+`config/models.yaml` üç model içerir; hepsi aynı prompt'ları ve aynı işleme adımlarını kullanır:
+
+| Anahtar | Model | Not |
+|---|---|---|
+| `qwen3-vl-8b` (varsayılan) | `Qwen/Qwen3-VL-8B-Instruct` | |
+| `qwen3.5-9b` | `Qwen/Qwen3.5-9B` | "Düşünme" modu `extra_body` ile kapalı; bf16'da L4'e sınırda sığar, gerekirse FP8 |
+| `medgemma-1.5-4b` | `google/medgemma-1.5-4b-it` | Erişimi kısıtlı: Hugging Face'te şartları kabul edin, vLLM için `HF_TOKEN` gerekir |
+
+Bir modeli kullanmak için vLLM'i o modelle başlatın (`vllm serve <model>`) ve servise
+`READER_ACTIVE_MODEL=<anahtar>` verin. Her model aynı test setinden geçirilip sonuçlar
+`python -m eval.run_eval compare a.jsonl b.jsonl c.jsonl --manifest ...` ile yan yana konur.
+Colab notebook'undaki **8d** hücresi bunu üç model için sırayla yapar.
 
 ### Colab ile test
 

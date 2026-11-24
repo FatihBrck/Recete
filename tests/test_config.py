@@ -186,3 +186,22 @@ def test_output_format_env_selects_compact_prompts(monkeypatch):
 def test_compact_without_compact_prompts_raises(models_file):
     with pytest.raises(ValueError):
         load_model_config(Settings(models_file=models_file, output_format="compact"))
+
+
+@pytest.mark.parametrize("key,model,thinking_off", [
+    ("qwen3-vl-8b", "Qwen/Qwen3-VL-8B-Instruct", False),
+    ("qwen3.5-9b", "Qwen/Qwen3.5-9B", True),
+    ("medgemma-1.5-4b", "google/medgemma-1.5-4b-it", False),
+])
+def test_repo_models_load(key, model, thinking_off):
+    cfg = load_model_config(Settings(active_model=key))
+    assert cfg.model == model
+    load_prompt_set(cfg)
+    kwargs = cfg.extra_body.get("chat_template_kwargs", {})
+    assert (kwargs.get("enable_thinking") is False) == thinking_off
+    cfg_c = load_model_config(Settings(active_model=key, output_format="compact"))
+    assert load_prompt_set(cfg_c).lens_printed.version.endswith("c")
+
+
+def test_extra_body_defaults_empty(models_file):
+    assert load_model_config(Settings(models_file=models_file)).extra_body == {}

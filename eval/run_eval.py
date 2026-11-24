@@ -125,14 +125,15 @@ def report(
 
 @app.command()
 def compare(
-    predictions_a: Path = typer.Argument(..., metavar="A.jsonl"),
-    predictions_b: Path = typer.Argument(..., metavar="B.jsonl"),
+    predictions: list[Path] = typer.Argument(..., metavar="A.jsonl B.jsonl [C.jsonl ...]"),
     manifest: Path = typer.Option(..., "--manifest"),
 ) -> None:
-    """İki tahmin dosyasının başlık metriklerini yan yana yazdırır."""
+    """İki veya daha fazla tahmin dosyasının başlık metriklerini yan yana yazdırır."""
+    if len(predictions) < 2:
+        raise typer.BadParameter("en az iki tahmin dosyası gerekir")
     rows = load_manifest(manifest)
     cols = []
-    for path in (predictions_a, predictions_b):
+    for path in predictions:
         preds = load_predictions(path)
         cols.append(
             (
@@ -142,10 +143,13 @@ def compare(
                 latency(preds),
             )
         )
-    lines = [f"| Metrik | {predictions_a.name} | {predictions_b.name} |", "|---|---|---|"]
+    lines = [
+        "| Metrik | " + " | ".join(p.name for p in predictions) + " |",
+        "|---|" + "---|" * len(predictions),
+    ]
 
     def row(name, fn):
-        lines.append(f"| {name} | {fn(cols[0])} | {fn(cols[1])} |")
+        lines.append(f"| {name} | " + " | ".join(str(fn(c)) for c in cols) + " |")
 
     row("Sınıflandırma doğruluğu", lambda c: _pct(c[0]))
     for f in ("sph", "cyl", "axis", "add", "bc", "dia", "color"):

@@ -59,8 +59,10 @@ class OpenAICompatClient:
         max_tokens: int,
         timeout_s: float,
         api_key: str = "EMPTY",
+        extra_body: dict | None = None,
     ) -> None:
         self._model = model
+        self._extra_body = dict(extra_body or {})
         self._max_tokens = max_tokens
         # Explicit httpx client: openai>=3 otherwise uses its vendored httpx2,
         # which respx cannot intercept; one transport for prod and tests.
@@ -79,6 +81,7 @@ class OpenAICompatClient:
             model=cfg.model,
             max_tokens=cfg.max_tokens,
             timeout_s=cfg.timeout_s,
+            extra_body=cfg.extra_body,
         )
 
     async def complete(
@@ -119,6 +122,7 @@ class OpenAICompatClient:
                         "strict": True,
                     },
                 },
+                extra_body=self._extra_body or None,
             )
         except openai.APITimeoutError as exc:
             raise VLMTimeout("VLM request timed out") from exc
