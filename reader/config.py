@@ -43,6 +43,8 @@ class ModelConfig(BaseModel):
     # Extra request fields sent to the OpenAI-compatible API, e.g.
     # {"chat_template_kwargs": {"enable_thinking": false}} for models that think by default.
     extra_body: dict = {}
+    validation: bool = True  # False: rules do not lower confidence (test only, never production)
+    prompt_variant: Literal["default", "min"] = "default"  # "min": short *-min / *-minc prompts
 
 
 class Settings(BaseSettings):
@@ -52,6 +54,9 @@ class Settings(BaseSettings):
     active_model: str | None = None
     vllm_base_url: str | None = None  # READER_VLLM_BASE_URL overrides the YAML base_url
     output_format: Literal["full", "compact"] | None = None  # READER_OUTPUT_FORMAT overrides the YAML
+    validation: bool | None = None  # READER_VALIDATION=false: test only
+    prompt_variant: Literal["default", "min"] | None = None  # READER_PROMPT_VARIANT
+    max_image_pixels: int | None = None  # READER_MAX_IMAGE_PIXELS
     max_upload_bytes: int = 15_000_000
 
 
@@ -81,6 +86,12 @@ def load_model_config(settings: Settings) -> ModelConfig:
         raise ValueError(f"{path}: invalid model '{key}': {exc}") from exc
     if settings.output_format:
         cfg = cfg.model_copy(update={"output_format": settings.output_format})
+    if settings.validation is not None:
+        cfg = cfg.model_copy(update={"validation": settings.validation})
+    if settings.prompt_variant:
+        cfg = cfg.model_copy(update={"prompt_variant": settings.prompt_variant})
+    if settings.max_image_pixels:
+        cfg = cfg.model_copy(update={"max_image_pixels": settings.max_image_pixels})
     if cfg.output_format == "compact" and cfg.compact_prompts is None:
         raise ValueError(f"{path}: model '{key}' has output_format compact but no compact_prompts")
     if settings.vllm_base_url:
@@ -107,6 +118,14 @@ def load_prompt_set(cfg: ModelConfig) -> PromptSet:
     names = cfg.compact_prompts if cfg.output_format == "compact" else cfg.prompts
     if names is None:
         raise ValueError("output_format is compact but compact_prompts is not configured")
+    if cfg.prompt_variant == "min":
+        suffix = "-minc" if cfg.output_format == "compact" else "-min"
+        names = PromptNames(
+            classify=names.classify,
+            lens_printed=f"lens_printed{suffix}",
+            lens_handwritten=f"lens_handwritten{suffix}",
+            glasses=f"glasses{suffix}",
+        )
     return PromptSet(
         **{
             field: load_prompt(cfg.prompt_dir / f"{getattr(names, field)}.md")

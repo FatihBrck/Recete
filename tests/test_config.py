@@ -205,3 +205,28 @@ def test_repo_models_load(key, model, thinking_off):
 
 def test_extra_body_defaults_empty(models_file):
     assert load_model_config(Settings(models_file=models_file)).extra_body == {}
+
+
+def test_validation_and_image_overrides(monkeypatch):
+    monkeypatch.setenv("READER_VALIDATION", "false")
+    monkeypatch.setenv("READER_MAX_IMAGE_PIXELS", "3240000")
+    cfg = load_model_config(Settings())
+    assert cfg.validation is False and cfg.max_image_pixels == 3240000
+    monkeypatch.delenv("READER_VALIDATION"); monkeypatch.delenv("READER_MAX_IMAGE_PIXELS")
+    cfg = load_model_config(Settings())
+    assert cfg.validation is True and cfg.max_image_pixels == 1638400
+
+
+@pytest.mark.parametrize("fmt,suffix", [("full", "-min"), ("compact", "-minc")])
+def test_minimal_prompt_variant(monkeypatch, fmt, suffix):
+    monkeypatch.setenv("READER_PROMPT_VARIANT", "min")
+    monkeypatch.setenv("READER_OUTPUT_FORMAT", fmt)
+    ps = load_prompt_set(load_model_config(Settings()))
+    assert ps.classify.version == "classify-v1"
+    for name in ("lens_printed", "lens_handwritten", "glasses"):
+        tpl = getattr(ps, name)
+        assert tpl.version == f"{name}{suffix}"
+        assert len(tpl.system) < 1500                  # gerçekten kısa
+        assert "Tahmin etme" in tpl.system and "sipariş" not in tpl.system.lower()
+    if fmt == "compact":
+        assert "raw" not in ps.lens_printed.system

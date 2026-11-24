@@ -74,6 +74,7 @@ Uyarılar `"<yol>: <kod>"` biçimindedir ve değer içermez.
 | `shared_conflict` | Bir gözün kendi BC/DIA değeri ile ortak (shared) değer birlikte var ve farklı; iki gözün güveni de düşürülür |
 | `confidence_unavailable` | Model logprob döndürmedi veya token hizalaması kurulamadı, güven hesaplanamadı |
 | `no_values_read` | Tür lens/gözlük olduğu halde iki gözde de hiçbir değer okunamadı (müşteri hizmetlerine) |
+| `validation_off` | Sonuç doğrulamaları pasif (test modu); bu yanıt otomatik onaya **gitmemeli** |
 
 ### Güven puanı
 
@@ -96,6 +97,9 @@ Ortam değişkenleri:
 | `READER_ACTIVE_MODEL` | dosyadaki `active` | Kullanılacak model anahtarı |
 | `READER_MAX_UPLOAD_BYTES` | `15000000` | Yükleme sınırı |
 | `READER_OUTPUT_FORMAT` | dosyadaki `output_format` (`full`) | `compact`: model değerleri düz metin ve belge bazında tek `handwritten` ile yazar (~%35-40 daha az çıktı, daha hızlı); API yanıtı aynı kalır |
+| `READER_PROMPT_VARIANT` | `default` | `min`: yalnızca temel kuralları içeren kısa prompt'lar (`*-min`, `*-minc`) |
+| `READER_MAX_IMAGE_PIXELS` | dosyadaki `max_image_pixels` | Modele giden görselin en fazla piksel sayısı (ör. `2560000` ≈ 1600×1600) |
+| `READER_VALIDATION` | `true` | **Yalnızca test:** `false` iken kurallar uyarı olarak listelenir ama güveni düşürmez; yanıta `validation_off` eklenir. Üretimde kapatmayın |
 | `READER_VLLM_BASE_URL` | dosyadaki `base_url` | vLLM adresini geçersiz kılar (ör. Colab'da `http://localhost:8000/v1`) |
 
 ### Model değiştirme
