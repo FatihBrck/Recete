@@ -192,3 +192,17 @@ async def test_stage_latencies_reported(cfg, prompts):
     r = await p.read(png_bytes())
     assert set(r.stage_latency_ms) == {"preprocess", "classify", "extract"}
     assert all(v >= 0 for v in r.stage_latency_ms.values())
+
+
+async def test_validation_off_marks_response(cfg, prompts, monkeypatch):
+    monkeypatch.setenv("READER_VALIDATION", "false")
+    vcfg = load_model_config(Settings())
+    p, fake = make(vcfg, prompts, [res(CLS_PRINTED), res(LENS_SPH)])
+    r = await p.read(png_bytes())
+    assert "validation_off" in r.warnings
+
+
+async def test_validation_on_has_no_marker(cfg, prompts):
+    p, fake = make(cfg, prompts, [res(CLS_PRINTED), res(LENS_SPH)])
+    r = await p.read(png_bytes())
+    assert "validation_off" not in r.warnings

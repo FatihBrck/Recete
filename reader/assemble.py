@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Literal
@@ -29,6 +30,10 @@ from reader.schemas import (
 from reader.validate import FORMAT_PENALTY, check_cyl_axis, check_value
 
 ConfidenceLookup = Callable[[str], float]
+
+# False = "validation off" (test only): rule codes are still listed as warnings, but they do
+# not lower confidence and unparseable values keep the model's confidence.
+_APPLY_RULES: ContextVar[bool] = ContextVar("apply_rules", default=True)
 
 Kind = Literal["sph", "cyl", "axis", "add", "bc", "dia", "color"]
 
@@ -113,12 +118,13 @@ def _build(
         codes.append(pair_code)
         penalize = True
     warnings.extend(f"{out_path}: {c}" for c in codes)
+    rules = _APPLY_RULES.get()
     if prep.norm.unparseable:
-        confidence = 0.0
+        confidence = 0.0 if rules else float(conf(conf_path))
         value: float | int | str | None = None
     else:
         confidence = float(conf(conf_path))
-        if penalize:
+        if penalize and rules:
             confidence *= FORMAT_PENALTY
         v = prep.norm.value
         value = float(v) if isinstance(v, Decimal) else v
@@ -257,9 +263,17 @@ def _assemble(ex: LensExtraction | GlassesExtraction, conf: ConfidenceLookup) ->
     return Assembled(right=right, left=left, brand=brand, warnings=warnings)
 
 
-def assemble_lens(ex: LensExtraction, conf: ConfidenceLookup) -> Assembled:
-    return _assemble(ex, conf)
+def _run(ex: LensExtraction | GlassesExtraction, conf: ConfidenceLookup, apply_rules: bool) -> Assembled:
+    token = _APPLY_RULES.set(apply_rules)
+    try:
+        return _assemble(ex, conf)
+    finally:
+        _APPLY_RULES.reset(token)
 
 
-def assemble_glasses(ex: GlassesExtraction, conf: ConfidenceLookup) -> Assembled:
-    return _assemble(ex, conf)
+def assemble_lens(ex: LensExtraction, conf: ConfidenceLookup, *, apply_rules: bool = True) -> Assembled:
+    return _run(ex, conf, apply_rules)
+
+
+def assemble_glasses(ex: GlassesExtraction, conf: ConfidenceLookup, *, apply_rules: bool = True) -> Assembled:
+    return _run(ex, conf, apply_rules)

@@ -32,6 +32,7 @@ M = TypeVar("M", bound=BaseModel)
 
 CONFIDENCE_UNAVAILABLE = "confidence_unavailable"
 NO_VALUES_READ = "no_values_read"
+VALIDATION_OFF = "validation_off"
 
 
 def _ms_since(t0: float) -> int:
@@ -132,10 +133,11 @@ class ReaderPipeline:
                 lookup = lambda path, _c=ext_conf: _c.get(full_path(path))  # noqa: E731
             else:
                 lookup = ext_conf.get
+            rules = self._cfg.validation
             if is_glasses:
-                assembled = assemble_glasses(extraction, lookup)
+                assembled = assemble_glasses(extraction, lookup, apply_rules=rules)
             else:
-                assembled = assemble_lens(extraction, lookup)
+                assembled = assemble_lens(extraction, lookup, apply_rules=rules)
             warnings.extend(assembled.warnings)
             if assembled.right is None and assembled.left is None:
                 # A lens/glasses prescription with nothing read must be visibly flagged.
@@ -143,6 +145,8 @@ class ReaderPipeline:
 
         if unavailable:
             warnings.append(CONFIDENCE_UNAVAILABLE)
+        if not self._cfg.validation:
+            warnings.append(VALIDATION_OFF)  # never auto-approve a response carrying this
 
         return ReadResponse(
             request_id=str(uuid.uuid4()),

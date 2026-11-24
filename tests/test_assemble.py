@@ -238,3 +238,26 @@ def test_warning_order_right_before_left_near_last():
         "right.sph: unparseable", "right.bc: unparseable",
         "right.near.sph: unparseable", "left.sph: unparseable",
     ]
+
+
+def test_validation_off_keeps_model_confidence_but_lists_warnings():
+    ex = LensExtraction(
+        right=LensEyeRaw(sph=RawField(raw="-2.29", handwritten=True), cyl=None, axis=None,
+                         add=None, bc=None, dia=None, color=None),
+        left=None, shared_bc=None, shared_dia=None, brand=None)
+    on = assemble_lens(ex, lambda p: 0.9)
+    off = assemble_lens(ex, lambda p: 0.9, apply_rules=False)
+    assert on.right.sph.confidence == pytest.approx(0.18)
+    assert off.right.sph.confidence == pytest.approx(0.9)
+    assert "right.sph: not_quarter_step" in off.warnings
+
+
+def test_validation_off_unparseable_keeps_confidence_value_none():
+    ex = LensExtraction(
+        right=LensEyeRaw(sph=None, cyl=None, axis=None, add=None,
+                         bc=RawField(raw="8.4-8.6", handwritten=True), dia=None, color=None),
+        left=None, shared_bc=None, shared_dia=None, brand=None)
+    off = assemble_lens(ex, lambda p: 0.8, apply_rules=False)
+    assert off.right.bc.value is None and off.right.bc.confidence == pytest.approx(0.8)
+    on = assemble_lens(ex, lambda p: 0.8)
+    assert on.right.bc.confidence == 0.0
